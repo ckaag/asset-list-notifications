@@ -1,0 +1,4 @@
+Bundle-Name: asset-list-notificiation-portlet
+Bundle-SymbolicName: com.github.ckaag.asset.list.notifications.portlet.bundle
+Bundle-Version: 1.0.0
+-sources: true
