@@ -2,11 +2,11 @@ package com.github.ckaag.asset.list.notifications.portlet.portlet;
 
 import com.github.ckaag.asset.list.notifications.portlet.constants.AssetListNotificationPortletKeys;
 
-import javax.portlet.Portlet;
-import javax.portlet.PortletException;
-import javax.portlet.RenderRequest;
-import javax.portlet.RenderResponse;
+import javax.portlet.*;
 
+import com.github.ckaag.asset.list.notifications.portlet.service.ListNotificationSender;
+import com.liferay.asset.kernel.model.AssetEntry;
+import com.liferay.asset.list.model.AssetListEntry;
 import com.liferay.portal.configuration.metatype.bnd.util.ConfigurableUtil;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
@@ -15,8 +15,12 @@ import com.liferay.portal.kernel.portlet.bridges.mvc.MVCPortlet;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Modified;
+import org.osgi.service.component.annotations.Reference;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,25 +43,45 @@ import java.util.Map;
         service = Portlet.class
 )
 public class AssetListNotificationPortlet extends MVCPortlet {
+    private static final Log log = LogFactoryUtil.getLog(AssetListNotificationPortlet.class);
 
+    @Reference
+    private ListNotificationSender listNotificationSender;
 
-        @Override
-        public void doView(
-                RenderRequest renderRequest, RenderResponse renderResponse)
-                throws IOException, PortletException {
+    @Override
+    public void doView(
+            RenderRequest renderRequest, RenderResponse renderResponse)
+            throws IOException, PortletException {
 
-                renderRequest.setAttribute(AssetListNotificationPortlet.class.getName(),assetListNotificationConfiguration);
+        renderRequest.setAttribute(AssetListNotificationPortlet.class.getName(), assetListNotificationConfiguration);
 
-                super.doView(renderRequest, renderResponse);
+        for (Map.Entry<AssetListEntry, PortletPreferences> entry : listNotificationSender.getNotificationPortlets().entrySet()) {
+            LocalDateTime lastModifiedDate = listNotificationSender.getLastModifiedDate(entry.getKey(), entry.getValue());
+            log.info("last modified: " + lastModifiedDate.format(DateTimeFormatter.ISO_DATE_TIME));
+            List<AssetEntry> elements = listNotificationSender.getEntriesSinceLastModified(entry.getKey(), entry.getValue(), lastModifiedDate);
+            if (!elements.isEmpty()) {
+                //listNotificationSender.updateLastDates(entry.getKey(), entry.getValue(), true, true);
+            }
+            //log.info("entry " + entry.getKey().getTitle() + "has entries: " + elements.size());
+            for (AssetEntry element : elements) {
+                //log.info("element: " + element.getTitle());
+            }
         }
 
-        @Activate
-        @Modified
-        protected void activate(Map<Object, Object> properties) {
-                assetListNotificationConfiguration = ConfigurableUtil.createConfigurable(AssetListNotificationConfiguration.class, properties);
-        }
+        super.doView(renderRequest, renderResponse);
+    }
 
-        private static final Log _log = LogFactoryUtil.getLog(AssetListNotificationPortlet.class);
+    @Activate
+    @Modified
+    protected void activate(Map<Object, Object> properties) {
+        assetListNotificationConfiguration = ConfigurableUtil.createConfigurable(AssetListNotificationConfiguration.class, properties);
+    }
 
-        private volatile AssetListNotificationConfiguration assetListNotificationConfiguration;
+    private volatile AssetListNotificationConfiguration assetListNotificationConfiguration;
+
+
+    public void updateSubscriptionForMeManually() {
+        //get portlet pref, extract asset list entry, and write to list
+        throw new UnsupportedOperationException("not yet implemented");
+    }
 }

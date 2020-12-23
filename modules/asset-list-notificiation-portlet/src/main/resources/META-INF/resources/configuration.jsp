@@ -12,6 +12,8 @@
 	var="configurationRenderURL"
 />
 
+<div class="container">
+
 <aui:form action="<%= configurationActionURL %>" method="post" name="fm">
 	<aui:input
 		name="<%= Constants.CMD %>"
@@ -62,9 +64,18 @@
 
 
 
+    The following placeholders will be replaced inside subject and body templates:
+
+    <ul>
+    <c:forEach var="entry" items="${placeholders}">
+        <li>${entry}</li>
+    </c:forEach>
+    </ul>
 
 
 	<aui:button-row>
 		<aui:button type="submit"></aui:button>
 	</aui:button-row>
 </aui:form>
+
+</div>

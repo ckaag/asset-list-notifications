@@ -1,6 +1,7 @@
 package com.github.ckaag.asset.list.notifications.portlet.portlet;
 
 import com.github.ckaag.asset.list.notifications.portlet.constants.AssetListNotificationPortletKeys;
+import com.github.ckaag.asset.list.notifications.portlet.notification.NotificationServiceImpl;
 import com.liferay.asset.list.model.AssetListEntry;
 import com.liferay.asset.list.service.AssetListEntryService;
 import com.liferay.petra.string.StringPool;
@@ -41,6 +42,7 @@ public class AssetListNotificationConfigurationAction extends DefaultConfigurati
         httpServletRequest.setAttribute(
                 AssetListNotificationConfiguration.class.getName(),
                 assetListNotificationConfiguration);
+        httpServletRequest.setAttribute("placeholders", NotificationServiceImpl.AVAILABLE_PLACEHOLDERS);
 
         ThemeDisplay td = (ThemeDisplay) httpServletRequest.getAttribute(WebKeys.THEME_DISPLAY);
         long groupId = td.getScopeGroupId();
@@ -68,8 +70,8 @@ public class AssetListNotificationConfigurationAction extends DefaultConfigurati
         Map<Locale, String> localizedSubjectTemplate = LocalizationUtil.getLocalizationMap(actionRequest, "localizedSubjectTemplate");
         String localizedSubjectTemplateXml = buildXmlFromMap(localizedSubjectTemplate, "MailSubject");
 
-        _log.info("selectedAssetList = " + selectedAssetList);
-        _log.info("localizedBodyTemplate = " + localizedBodyTemplateXml);
+        //_log.info("selectedAssetList = " + selectedAssetList);
+        //_log.info("localizedBodyTemplate = " + localizedBodyTemplateXml);
 
         setPreference(actionRequest, "selectedAssetList", selectedAssetList);
         setPreference(actionRequest, "localizedBodyTemplate", localizedBodyTemplateXml);
