@@ -43,4 +43,6 @@ taglib uri="http://liferay.com/tld/ui" prefix="liferay-ui" %>
 		userSpecificMode = portletPreferences.getValue("userSpecificMode", myConfiguration.userSpecificMode());
 		minutesBetweenMails = portletPreferences.getValue("minutesBetweenMails", myConfiguration.minutesBetweenMails());
 	}
+
+	renderRequest.setAttribute("disableChangeButton", "forced".equals(receiverSelectMode));
 %>

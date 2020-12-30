@@ -37,10 +37,7 @@ import javax.portlet.PortletPreferences;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Component(immediate = true, service = ListNotificationSender.class)
@@ -96,11 +93,11 @@ public class ListNotificationSenderImpl implements ListNotificationSender {
     }
 
     @Override
-    public Map<AssetListEntry, PortletPreferences> getNotificationPortlets() {
+    public Map<AssetListEntry, AbstractMap.SimpleImmutableEntry<com.liferay.portal.kernel.model.PortletPreferences, PortletPreferences>> getNotificationPortlets() {
         DynamicQuery dq = PortletPreferencesLocalServiceUtil.dynamicQuery();
         dq.add(RestrictionsFactoryUtil.like("portletId", AssetListNotificationPortletKeys.ASSETLISTNOTIFICATION + "%"));
         List<com.liferay.portal.kernel.model.PortletPreferences> list = PortletPreferencesLocalServiceUtil.dynamicQuery(dq);
-        HashMap<AssetListEntry, PortletPreferences> result = new HashMap<>();
+        HashMap<AssetListEntry, AbstractMap.SimpleImmutableEntry<com.liferay.portal.kernel.model.PortletPreferences, PortletPreferences>> result = new HashMap<>();
         for (com.liferay.portal.kernel.model.PortletPreferences portletPreferences : list) {
             PortletPreferences portletPref = PortletPreferencesLocalServiceUtil.fetchPreferences(portletPreferences.getCompanyId(), portletPreferences.getOwnerId(), portletPreferences.getOwnerType(), portletPreferences.getPlid(), portletPreferences.getPortletId());
             String assetListEntryIdString = portletPref.getValue("selectedAssetList", "-1");
@@ -108,7 +105,7 @@ public class ListNotificationSenderImpl implements ListNotificationSender {
                 long id = Long.parseLong(assetListEntryIdString);
                 AssetListEntry ale = AssetListEntryLocalServiceUtil.fetchAssetListEntry(id);
                 if (ale != null) {
-                    result.put(ale, portletPref);
+                    result.put(ale, new AbstractMap.SimpleImmutableEntry<>(portletPreferences, portletPref));
                 }
             } catch (Exception e) {
                 LogFactoryUtil.getLog(this.getClass()).error("Something broke", e);
@@ -190,9 +187,10 @@ public class ListNotificationSenderImpl implements ListNotificationSender {
     private NotificationService notificationService;
 
     @Override
-    public void sendMailInternal(LocalDateTime lastModifiedDate, AssetListEntry list, PortletPreferences portletPreferences, List<User> receivingUsers, List<AssetEntry> content) {
+    public void sendMailInternal(LocalDateTime lastModifiedDate, AssetListEntry list, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences portletPreferences, List<User> receivingUsers, List<AssetEntry> content) {
         for (User user : receivingUsers) {
-            notificationService.sendUserMailAndNotificationIfRequested(user, list, lastModifiedDate, portletPreferences, content);
+            notificationService.sendUserMailAndNotificationIfRequested(user, list, portletPreferences.getValue("emailFromAddress", "notification@localhost.localdomain"), portletPreferences.getValue("emailFromName", "Anonymous"), lastModifiedDate, liferayPortletPreferences, portletPreferences, content);
         }
     }
+
 }

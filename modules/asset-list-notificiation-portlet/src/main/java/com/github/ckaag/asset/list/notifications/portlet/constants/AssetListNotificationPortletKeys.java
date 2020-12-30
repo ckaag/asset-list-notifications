@@ -11,4 +11,8 @@ public class AssetListNotificationPortletKeys {
             "com_github_ckaag_asset_list_notifications_portlet_AssetListNotificationPortlet";
 
     public static final int NOTIFICATION_TYPE = 10;
+
+    public static final String CLASS_NAME_PARAM = "classname";
+
+    public static final String CLASS_PK_PARAM ="classpk";
 }

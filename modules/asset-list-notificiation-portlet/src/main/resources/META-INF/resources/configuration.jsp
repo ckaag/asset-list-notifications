@@ -41,13 +41,13 @@
 
 
     <aui:select label="receiver-select-mode-label" name="receiverSelectMode" value="<%= receiverSelectMode %>">
-        <aui:option value="optin">Opt-In (only get notifications if opted in manually)</aui:option>
-        <aui:option value="optout">Opt-Out (everyone gets notifications except if he opted out manually)</aui:option>
-        <aui:option value="forced">This-Is-Not-A-Choice-Mode (all Site Members automatically get notifications)</aui:option>
+        <%-- <aui:option value="optin">Opt-In (only get notifications if opted in manually)</aui:option> --%>
+        <%-- <aui:option value="optout">Opt-Out (everyone gets notifications except if he opted out manually)</aui:option> --%>
+        <aui:option value="forced"><liferay-ui:message key="assetlistnotification.this-is-not-a-choice"/></aui:option>
     </aui:select>
     <aui:select label="user-specific-mode-label" name="userSpecificMode" value="<%= userSpecificMode %>">
         <aui:option value="true">Evaluate per individual user (Default)</aui:option>
-        <aui:option value="false">Everyone-Gets-The-Same-Mode (higher performance if many users listening to the same changes, but no personalization features)</aui:option>
+        <%-- <aui:option value="false"><liferay-ui:message key="assetlistnotification.everybody-gets-same"/></aui:option> --%>
     </aui:select>
 
 
@@ -64,7 +64,7 @@
 
 
 
-    The following placeholders will be replaced inside subject and body templates:
+    <liferay-ui:message key="assetlistnotification.replacement-description"/>
 
     <ul>
     <c:forEach var="entry" items="${placeholders}">

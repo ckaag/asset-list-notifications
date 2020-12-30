@@ -20,13 +20,13 @@ public interface AssetListNotificationConfiguration {
     @Meta.AD(required = false)
     public String localizedSubjectTemplate();
 
-    @Meta.AD(required = false)
+    @Meta.AD(required = false, deflt = "Anonymous")
     public String emailFromName();
 
-    @Meta.AD(required = false)
+    @Meta.AD(required = false, deflt = "notification@localhost.localdomain")
     public String emailFromAddress();
 
-    @Meta.AD(required = false)
+    @Meta.AD(required = false, deflt = "forced")
     public String receiverSelectMode();
 
     @Meta.AD(required = false)

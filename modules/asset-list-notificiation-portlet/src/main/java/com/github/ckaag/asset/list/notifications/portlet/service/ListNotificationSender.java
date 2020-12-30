@@ -7,11 +7,12 @@ import com.liferay.portal.kernel.model.User;
 
 import javax.portlet.PortletPreferences;
 import java.time.LocalDateTime;
+import java.util.AbstractMap;
 import java.util.List;
 import java.util.Map;
 
 public interface ListNotificationSender {
-    Map<AssetListEntry, PortletPreferences> getNotificationPortlets();
+    Map<AssetListEntry, AbstractMap.SimpleImmutableEntry<com.liferay.portal.kernel.model.PortletPreferences, PortletPreferences>> getNotificationPortlets();
 
     LocalDateTime getLastModifiedDate(AssetListEntry list, PortletPreferences portletPreferences);
 
@@ -23,10 +24,10 @@ public interface ListNotificationSender {
 
     List<User> getSubscribingUsers(AssetListEntry list, PortletPreferences portletPreferences);
 
-    void sendMailInternal(LocalDateTime lastModifiedDate, AssetListEntry list, PortletPreferences portletPreferences, List<User> receivingUserIds, List<AssetEntry> content);
+    void sendMailInternal(LocalDateTime lastModifiedDate, AssetListEntry list, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences portletPreferences, List<User> receivingUserIds, List<AssetEntry> content);
 
-    default void sendMailUpdatesTo(LocalDateTime lastModifiedDate, AssetListEntry list, PortletPreferences portletPreferences, List<User> receivingUserIds, List<AssetEntry> content, boolean updateLastModifiedField) {
-        sendMailInternal(lastModifiedDate, list, portletPreferences, receivingUserIds, content);
+    default void sendMailUpdatesTo(LocalDateTime lastModifiedDate, AssetListEntry list, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences portletPreferences, List<User> receivingUserIds, List<AssetEntry> content, boolean updateLastModifiedField) {
+        sendMailInternal(lastModifiedDate, list, liferayPortletPreferences, portletPreferences, receivingUserIds, content);
         if (updateLastModifiedField) {
             this.updateLastDates(list, portletPreferences, true, true);
         }
@@ -47,16 +48,16 @@ public interface ListNotificationSender {
     }
 
     default void tickScheduler() {
-        for (Map.Entry<AssetListEntry, PortletPreferences> pair : getNotificationPortlets().entrySet()) {
-            PortletPreferences portletPreferences = pair.getValue();
-            LocalDateTime lastSentDate = getLastSentDate(pair.getKey(), portletPreferences);
-            if (LocalDateTime.now().isAfter(getNextScheduledUpdateInstant(portletPreferences, lastSentDate))) {
-                LocalDateTime lastModifiedDate = getLastModifiedDate(pair.getKey(), portletPreferences);
-                List<AssetEntry> entries = getEntriesSinceLastModified(pair.getKey(), portletPreferences, lastModifiedDate);
+        for (Map.Entry<AssetListEntry, AbstractMap.SimpleImmutableEntry<com.liferay.portal.kernel.model.PortletPreferences, PortletPreferences>> pair : getNotificationPortlets().entrySet()) {
+            AbstractMap.SimpleImmutableEntry<com.liferay.portal.kernel.model.PortletPreferences, PortletPreferences> portletPreferencesPair = pair.getValue();
+            LocalDateTime lastSentDate = getLastSentDate(pair.getKey(), portletPreferencesPair.getValue());
+            if (LocalDateTime.now().isAfter(getNextScheduledUpdateInstant(portletPreferencesPair.getValue(), lastSentDate))) {
+                LocalDateTime lastModifiedDate = getLastModifiedDate(pair.getKey(), portletPreferencesPair.getValue());
+                List<AssetEntry> entries = getEntriesSinceLastModified(pair.getKey(), portletPreferencesPair.getValue(), lastModifiedDate);
                 if (!entries.isEmpty()) {
                     LogFactoryUtil.getLog(this.getClass()).info("Sending out subscription mails for Content Set" + pair.getKey().getTitle() + " on site " + pair.getKey().getGroupId());
-                    List<User> receivers = getSubscribingUsers(pair.getKey(), portletPreferences);
-                    sendMailUpdatesTo(lastModifiedDate, pair.getKey(), portletPreferences, receivers, entries, true);
+                    List<User> receivers = getSubscribingUsers(pair.getKey(), portletPreferencesPair.getValue());
+                    sendMailUpdatesTo(lastModifiedDate, pair.getKey(), portletPreferencesPair.getKey(), portletPreferencesPair.getValue(), receivers, entries, true);
                 }
             }
         }

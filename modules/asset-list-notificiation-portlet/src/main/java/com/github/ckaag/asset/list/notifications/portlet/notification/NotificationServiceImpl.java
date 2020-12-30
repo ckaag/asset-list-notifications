@@ -1,6 +1,7 @@
 package com.github.ckaag.asset.list.notifications.portlet.notification;
 
 import com.github.ckaag.asset.list.notifications.portlet.constants.AssetListNotificationPortletKeys;
+import com.github.ckaag.asset.list.notifications.portlet.service.PortletLinkService;
 import com.liferay.asset.kernel.model.AssetEntry;
 import com.liferay.asset.list.model.AssetListEntry;
 import com.liferay.mail.kernel.model.MailMessage;
@@ -28,6 +29,9 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.*;
 
+import static com.github.ckaag.asset.list.notifications.portlet.constants.AssetListNotificationPortletKeys.CLASS_NAME_PARAM;
+import static com.github.ckaag.asset.list.notifications.portlet.constants.AssetListNotificationPortletKeys.CLASS_PK_PARAM;
+
 @Component(service = NotificationService.class, immediate = true)
 public class NotificationServiceImpl implements NotificationService {
 
@@ -38,6 +42,7 @@ public class NotificationServiceImpl implements NotificationService {
     private static final String ASSET_PUBLISH_DATE = "ASSET_PUBLISH_DATE";
     private static final String ASSET_SUMMARY = "ASSET_SUMMARY";
     private static final String ASSET_USERNAME = "ASSET_USERNAME";
+    private static final String ASSET_VIEW_URL = "ASSET_VIEW_URL";
     private static final String LIST_ITEM_PREFIX = "FOR_EACH_ASSET_START";
     private static final String LIST_ITEM_POSTFIX = "FOR_EACH_ASSET_END";
     public static final String ASSET_COUNT = "ASSET_COUNT";
@@ -47,7 +52,7 @@ public class NotificationServiceImpl implements NotificationService {
     public static final String LAST_MODIFIED_DATE = "LAST_MODIFIED_DATE";
     public static final String USER_FIRST_NAME = "USER_FIRST_NAME";
 
-    public static final List<String> AVAILABLE_PLACEHOLDERS = Arrays.asList(ASSET_COUNT, USER_FIRST_NAME, USER_FULL_NAME, USER_LAST_NAME, ASSET_LIST_TITLE, LAST_MODIFIED_DATE, LIST_ITEM_PREFIX, LIST_ITEM_POSTFIX, ASSET_MODIFIED_DATE, ASSET_DESCRIPTION, ASSET_TITLE, ASSET_CREATE_DATE, ASSET_PUBLISH_DATE, ASSET_SUMMARY, ASSET_USERNAME);
+    public static final List<String> AVAILABLE_PLACEHOLDERS = Arrays.asList(ASSET_COUNT, USER_FIRST_NAME, USER_FULL_NAME, USER_LAST_NAME, ASSET_LIST_TITLE, LAST_MODIFIED_DATE, LIST_ITEM_PREFIX, LIST_ITEM_POSTFIX, ASSET_MODIFIED_DATE, ASSET_DESCRIPTION, ASSET_TITLE, ASSET_CREATE_DATE, ASSET_PUBLISH_DATE, ASSET_SUMMARY, ASSET_USERNAME, ASSET_VIEW_URL);
 
 
     private String replaceBasicElements(Locale locale, String template, User receiver, AssetListEntry sourcedList, @SuppressWarnings("unused") PortletPreferences preferences, LocalDateTime lastModified, List<AssetEntry> newAssets) {
@@ -56,7 +61,7 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public String buildHtmlBodyMail(User receiver, AssetListEntry sourcedList, PortletPreferences preferences, LocalDateTime lastModified, List<AssetEntry> newAssets) {
+    public String buildHtmlBodyMail(User receiver, AssetListEntry sourcedList, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences preferences, LocalDateTime lastModified, List<AssetEntry> newAssets) {
         String templates = preferences.getValue("localizedBodyTemplate", null);
         if (templates == null) {
             return null;
@@ -82,7 +87,7 @@ public class NotificationServiceImpl implements NotificationService {
                     break;
                 } else {
                     for (AssetEntry asset : newAssets) {
-                        sb.append(replaceListItemTemplate(locale, template.substring(startIndex + LIST_ITEM_PREFIX.length(), endIndex), asset));
+                        sb.append(replaceListItemTemplate(locale, template.substring(startIndex + LIST_ITEM_PREFIX.length(), endIndex), asset, liferayPortletPreferences));
                     }
                     endIndex = endIndex + LIST_ITEM_POSTFIX.length();
                 }
@@ -92,7 +97,7 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public String buildSubjectMail(User receiver, AssetListEntry sourcedList, PortletPreferences preferences, LocalDateTime lastModified, List<AssetEntry> newAssets) {
+    public String buildSubjectMail(User receiver, AssetListEntry sourcedList, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences preferences, LocalDateTime lastModified, List<AssetEntry> newAssets) {
         String templates = preferences.getValue("localizedSubjectTemplate", null);
         if (templates == null) {
             return null;
@@ -103,23 +108,31 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
 
-    private String replaceListItemTemplate(Locale locale, String subtemplate, AssetEntry asset) {
+    private String replaceListItemTemplate(Locale locale, String subtemplate, AssetEntry asset, com.liferay.portal.kernel.model.PortletPreferences portletPreferences) {
         DateFormat sdf = SimpleDateFormat.getDateTimeInstance(2, 2, locale);
-        return subtemplate.replace(ASSET_MODIFIED_DATE, sdf.format(asset.getModifiedDate())).replace(ASSET_TITLE, asset.getTitle()).replace(ASSET_DESCRIPTION, asset.getDescription()).replace(ASSET_CREATE_DATE, sdf.format(asset.getCreateDate())).replace(ASSET_PUBLISH_DATE, sdf.format(asset.getPublishDate())).replace(ASSET_SUMMARY, asset.getSummary()).replace(ASSET_USERNAME, asset.getUserName());
+        return replaceLink(subtemplate.replace(ASSET_MODIFIED_DATE, sdf.format(asset.getModifiedDate())).replace(ASSET_TITLE, asset.getTitle()).replace(ASSET_DESCRIPTION, asset.getDescription()).replace(ASSET_CREATE_DATE, sdf.format(asset.getCreateDate())).replace(ASSET_PUBLISH_DATE, sdf.format(asset.getPublishDate())).replace(ASSET_SUMMARY, asset.getSummary()).replace(ASSET_USERNAME, asset.getUserName()), portletPreferences, asset);
+    }
+
+    private String replaceLink(String template, com.liferay.portal.kernel.model.PortletPreferences portletPreferences, AssetEntry asset) {
+        if (template.contains(ASSET_VIEW_URL)) {
+            return template.replace(ASSET_VIEW_URL, portletLinkService.buildRelativePortletUrl(portletPreferences, Map.of(CLASS_NAME_PARAM, Collections.singletonList(asset.getClassName()), CLASS_PK_PARAM, Collections.singletonList(String.valueOf(asset.getClassPK())))));
+        } else {
+            return template;
+        }
     }
 
     @Reference
     private MailService mailService;
 
     @Override
-    public void sendUserMail(User receiver, String subject, String body) {
+    public void sendUserMail(String emailFromAddress, String emailFromName, User receiver, String subject, String body) {
         MailMessage mail = new MailMessage();
         try {
             String receiverEmail = receiver.getEmailAddress();
             mail.setBody(body);
             mail.setSubject(subject);
             mail.setTo(new InternetAddress(receiverEmail));
-            mail.setFrom(new InternetAddress("notification@localhost"));
+            mail.setFrom(new InternetAddress(emailFromAddress, emailFromName));
             mail.setHTMLFormat(true);
             log.info(String.format("Sending mail with subject '%s' to recipient '%s'", mail.getSubject(), receiverEmail));
             mailService.sendEmail(mail);
@@ -191,4 +204,7 @@ public class NotificationServiceImpl implements NotificationService {
         //TODO: implement
         return true;
     }
+
+    @Reference
+    private PortletLinkService portletLinkService;
 }
