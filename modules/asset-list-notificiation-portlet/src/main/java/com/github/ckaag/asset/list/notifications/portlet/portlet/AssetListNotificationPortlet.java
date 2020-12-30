@@ -56,6 +56,9 @@ public class AssetListNotificationPortlet extends MVCPortlet {
 
         checkForAssetRedirect(renderRequest, renderResponse);
 
+
+        renderRequest.setAttribute(AssetListNotificationConfiguration.class.getName(), assetListNotificationConfiguration);
+
         renderRequest.setAttribute(AssetListNotificationPortlet.class.getName(), assetListNotificationConfiguration);
 
         renderRequest.setAttribute("valueChangeButton", getTextForChangeButton(renderRequest));
