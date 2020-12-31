@@ -192,19 +192,6 @@ public class NotificationServiceImpl implements NotificationService {
         return out;
     }
 
-
-    @Override
-    public boolean isListeningForMail(User receiver) {
-        //TODO: implement
-        return true;
-    }
-
-    @Override
-    public boolean isListeningForNotification(User receiver) {
-        //TODO: implement
-        return true;
-    }
-
     @Reference
     private PortletLinkService portletLinkService;
 }

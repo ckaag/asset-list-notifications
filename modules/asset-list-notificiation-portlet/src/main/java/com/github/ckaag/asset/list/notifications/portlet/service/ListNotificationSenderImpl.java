@@ -43,7 +43,9 @@ import java.util.stream.Collectors;
 @Component(immediate = true, service = ListNotificationSender.class)
 public class ListNotificationSenderImpl implements ListNotificationSender {
 
-    private static final String EXPANDO_FIELD_NAME = "LAST_MODIFIED_NOTIFICATION_EXPANDO";
+    private static final String LAST_MODIFIED_NOTIFICATION_EXPANDO = "LAST_MODIFIED_NOTIFICATION_EXPANDO";
+    private static final String NOTIFICATION_OPTED_OUT_EXPANDO = "NOTIFICATION_OPTED_OUT_EXPANDO";
+    private static final String NOTIFICATION_OPTED_IN_EXPANDO = "NOTIFICATION_OPTED_IN_EXPANDO";
     public static final String CUSTOM_FIELDS_DEFAULT_TABLE_NAME = "CUSTOM_FIELDS";
 
     @Activate
@@ -62,25 +64,127 @@ public class ListNotificationSenderImpl implements ListNotificationSender {
                 } catch (NoSuchTableException e) {
                     expandoTable = ExpandoTableLocalServiceUtil.addDefaultTable(companyId, className.getClassNameId());
                 }
-                if (!doCustomFieldsExist(expandoTable.getTableId())) {
-                    ExpandoColumnLocalServiceUtil.addColumn(expandoTable.getTableId(), EXPANDO_FIELD_NAME, ExpandoColumnConstants.STRING);
-                }
+                createCustomFieldIfNotExists(expandoTable.getTableId(), LAST_MODIFIED_NOTIFICATION_EXPANDO, ExpandoColumnConstants.STRING);
+                createCustomFieldIfNotExists(expandoTable.getTableId(), NOTIFICATION_OPTED_OUT_EXPANDO, ExpandoColumnConstants.LONG_ARRAY);
+                createCustomFieldIfNotExists(expandoTable.getTableId(), NOTIFICATION_OPTED_IN_EXPANDO, ExpandoColumnConstants.LONG_ARRAY);
             } catch (Exception e) {
                 LogFactoryUtil.getLog(this.getClass()).error("Something went wrong during creation of custom fields", e);
             }
         }
     }
 
-    private boolean doCustomFieldsExist(long tableId) {
+    private void createCustomFieldIfNotExists(long tableId, String expandoName, int typeOfField) throws PortalException {
+        boolean exists;
         try {
-            return null != ExpandoColumnLocalServiceUtil.getColumn(tableId, EXPANDO_FIELD_NAME);
+            exists = null != ExpandoColumnLocalServiceUtil.getColumn(tableId, expandoName);
         } catch (Exception e) {
-            return false;
+            exists = false;
+        }
+        if (!exists) {
+            ExpandoColumnLocalServiceUtil.addColumn(tableId, expandoName, typeOfField);
         }
     }
 
+    @Override
+    public void optOutOfNotification(AssetListEntry list, long userId) throws PortalException {
+        Optional<Boolean> beforeState = this.getOptedInStatus(list, userId);
+        if (beforeState.isPresent() && beforeState.get()) {
+            removeFromOptList(NOTIFICATION_OPTED_IN_EXPANDO, list, userId);
+        }
+        if (beforeState.isEmpty() || beforeState.get()) {
+            addToOptList(NOTIFICATION_OPTED_OUT_EXPANDO, list, userId);
+        }
+    }
+
+    @Override
+    public void optIntoNotification(AssetListEntry list, long userId) throws PortalException {
+        Optional<Boolean> beforeState = this.getOptedInStatus(list, userId);
+        if (beforeState.isPresent() && !beforeState.get()) {
+            removeFromOptList(NOTIFICATION_OPTED_OUT_EXPANDO, list, userId);
+        }
+        if (beforeState.isEmpty() || !beforeState.get()) {
+            addToOptList(NOTIFICATION_OPTED_IN_EXPANDO, list, userId);
+        }
+    }
+
+    private void addToOptList(String expandoName, AssetListEntry entity, long userId) throws PortalException {
+        ExpandoValue ev = expandoValueLocalService.getValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, expandoName, entity.getAssetListEntryId());
+        if (ev == null) {
+            expandoValueLocalService.addValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, expandoName, entity.getAssetListEntryId(), new long[]{userId});
+        } else {
+            long[] prev = ev.getLongArray();
+            long[] next = addUniqueToArray(prev, userId);
+            ev.setLongArray(next);
+            expandoValueLocalService.updateExpandoValue(ev);
+        }
+    }
+
+    private void removeFromOptList(String expandoName, AssetListEntry entity, long userId) throws PortalException {
+        ExpandoValue ev = expandoValueLocalService.getValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, expandoName, entity.getAssetListEntryId());
+        if (ev == null) {
+            expandoValueLocalService.addValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, expandoName, entity.getAssetListEntryId(), new long[]{});
+        } else {
+            long[] prev = ev.getLongArray();
+            long[] next = removeUniqueFromArray(prev, userId);
+            ev.setLongArray(next);
+            expandoValueLocalService.updateExpandoValue(ev);
+        }
+    }
+
+    private long[] removeUniqueFromArray(long[] prev, long userId) {
+        if (prev == null || prev.length == 0) {
+            return new long[0];
+        }
+        long[] out = new long[prev.length - 1];
+        int outIdx = 0;
+        for (long l : prev) {
+            if (l != userId) {
+                out[outIdx] = l;
+                outIdx += 1;
+            }
+        }
+        return out;
+    }
+
+    private long[] addUniqueToArray(long[] prev, long userId) {
+        if (prev == null || prev.length == 0) {
+            return new long[]{userId};
+        }
+        for (long f : prev) {
+            if (f == userId) {
+                return prev;
+            }
+        }
+        long[] out = new long[prev.length + 1];
+        System.arraycopy(prev, 0, out, 0, prev.length);
+        out[out.length - 1] = userId;
+        return out;
+    }
+
+
+    @Override
+    public Optional<Boolean> getOptedInStatus(AssetListEntry entity, long userId) throws PortalException {
+        ExpandoValue evIn = expandoValueLocalService.getValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, NOTIFICATION_OPTED_IN_EXPANDO, entity.getAssetListEntryId());
+        if (evIn != null) {
+            for (long uid : evIn.getLongArray()) {
+                if (uid == userId) {
+                    return Optional.of(true);
+                }
+            }
+        }
+        ExpandoValue evOut = expandoValueLocalService.getValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, NOTIFICATION_OPTED_OUT_EXPANDO, entity.getAssetListEntryId());
+        if (evOut != null) {
+            for (long uid : evOut.getLongArray()) {
+                if (uid == userId) {
+                    return Optional.of(false);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
     private void setModifiedCustomField(AssetListEntry entity, String value) throws PortalException {
-        ExpandoValue ev = expandoValueLocalService.getValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, EXPANDO_FIELD_NAME, entity.getAssetListEntryId());
+        ExpandoValue ev = expandoValueLocalService.getValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, LAST_MODIFIED_NOTIFICATION_EXPANDO, entity.getAssetListEntryId());
         ev.setString(value);
         expandoValueLocalService.updateExpandoValue(ev);
     }
@@ -89,7 +193,7 @@ public class ListNotificationSenderImpl implements ListNotificationSender {
     ExpandoValueLocalService expandoValueLocalService;
 
     private String getModifiedCustomField(AssetListEntry entity) throws PortalException {
-        return expandoValueLocalService.getValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, EXPANDO_FIELD_NAME, entity.getAssetListEntryId()).getString();
+        return expandoValueLocalService.getValue(entity.getCompanyId(), AssetListEntry.class.getName(), CUSTOM_FIELDS_DEFAULT_TABLE_NAME, LAST_MODIFIED_NOTIFICATION_EXPANDO, entity.getAssetListEntryId()).getString();
     }
 
     @Override
@@ -187,9 +291,15 @@ public class ListNotificationSenderImpl implements ListNotificationSender {
     private NotificationService notificationService;
 
     @Override
-    public void sendMailInternal(LocalDateTime lastModifiedDate, AssetListEntry list, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences portletPreferences, List<User> receivingUsers, List<AssetEntry> content) {
+    public void sendMailInternal(LocalDateTime lastModifiedDate, AssetListEntry list, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences portletPreferences, List<User> receivingUsers, List<AssetEntry> content) throws PortalException {
+        String optMode = portletPreferences.getValue("receiverSelectMode", "");
+        boolean isOptIn = "optin".equals(optMode);
+        boolean isOptOut = "optout".equals(optMode);
         for (User user : receivingUsers) {
-            notificationService.sendUserMailAndNotificationIfRequested(user, list, portletPreferences.getValue("emailFromAddress", "notification@localhost.localdomain"), portletPreferences.getValue("emailFromName", "Anonymous"), lastModifiedDate, liferayPortletPreferences, portletPreferences, content);
+            boolean isListeningForMail = (!isOptIn && !isOptOut) || (isOptIn && this.getOptedInStatus(list, user.getUserId()).stream().allMatch(t -> t)) || (isOptOut && this.getOptedInStatus(list, user.getUserId()).orElse(true));
+            //noinspection UnnecessaryLocalVariable
+            boolean isListeningForNotification = isListeningForMail;
+            notificationService.sendUserMailAndNotificationIfRequested(isListeningForMail, isListeningForNotification, user, list, portletPreferences.getValue("emailFromAddress", "notification@localhost.localdomain"), portletPreferences.getValue("emailFromName", "Anonymous"), lastModifiedDate, liferayPortletPreferences, portletPreferences, content);
         }
     }
 

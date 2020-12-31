@@ -3,22 +3,24 @@ package com.github.ckaag.asset.list.notifications.portlet.portlet;
 import com.github.ckaag.asset.list.notifications.portlet.constants.AssetListNotificationPortletKeys;
 import com.github.ckaag.asset.list.notifications.portlet.service.ListNotificationSender;
 import com.liferay.asset.kernel.model.AssetRendererFactory;
+import com.liferay.asset.list.model.AssetListEntry;
+import com.liferay.asset.list.service.AssetListEntryLocalService;
 import com.liferay.portal.configuration.metatype.bnd.util.ConfigurableUtil;
+import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.language.LanguageUtil;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.portlet.LiferayPortletRequest;
 import com.liferay.portal.kernel.portlet.LiferayPortletResponse;
 import com.liferay.portal.kernel.portlet.bridges.mvc.MVCPortlet;
+import com.liferay.portal.kernel.theme.ThemeDisplay;
 import com.liferay.portal.kernel.util.ParamUtil;
+import com.liferay.portal.kernel.util.WebKeys;
 import org.osgi.service.component.annotations.*;
 
 import javax.portlet.*;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static com.github.ckaag.asset.list.notifications.portlet.constants.AssetListNotificationPortletKeys.CLASS_NAME_PARAM;
 import static com.github.ckaag.asset.list.notifications.portlet.constants.AssetListNotificationPortletKeys.CLASS_PK_PARAM;
@@ -43,11 +45,15 @@ import static com.github.ckaag.asset.list.notifications.portlet.constants.AssetL
         service = Portlet.class
 )
 public class AssetListNotificationPortlet extends MVCPortlet {
-    private static final Log log = LogFactoryUtil.getLog(AssetListNotificationPortlet.class);
     public static final String ASSET_REDIRECT_URL = "assetRedirectUrl";
-
+    private static final Log log = LogFactoryUtil.getLog(AssetListNotificationPortlet.class);
+    // to dynamically use assetrenderers to get view urls for each asset if we want
+    private final Map<String, List<AssetRendererFactory<?>>> assetRendererFactoryHashMap = new HashMap<>();
     @Reference
     private ListNotificationSender listNotificationSender;
+    @Reference
+    private AssetListEntryLocalService assetListEntryLocalService;
+    private volatile AssetListNotificationConfiguration assetListNotificationConfiguration;
 
     @Override
     public void doView(
@@ -66,13 +72,34 @@ public class AssetListNotificationPortlet extends MVCPortlet {
         super.doView(renderRequest, renderResponse);
     }
 
-    private String getTextForChangeButton(RenderRequest renderRequest) {
-        return LanguageUtil.get(renderRequest.getLocale(), isSubscribed(renderRequest) ? "assetlistnotification.unsubscribe" : "assetlistnotification.subscribe");
+    private String getTextForChangeButton(RenderRequest renderRequest) throws PortletException {
+        try {
+            String receiverSelectMode = renderRequest.getPreferences().getValue("receiverSelectMode", "");
+            if ("forced".equals(receiverSelectMode)) {
+                return LanguageUtil.get(renderRequest.getLocale(), "assetlistnotification.disabled");
+            }
+            return LanguageUtil.get(renderRequest.getLocale(), isSubscribed(renderRequest) ? "assetlistnotification.unsubscribe" : "assetlistnotification.subscribe");
+        } catch (Exception e) {
+            throw new PortletException(e);
+        }
     }
 
-    private boolean isSubscribed(RenderRequest renderRequest) {
-        //TODO: implement functionality based on stored values and configuration
-        return false;
+    private boolean isSubscribed(RenderRequest renderRequest) throws PortalException {
+        ThemeDisplay td = (ThemeDisplay) renderRequest.getAttribute(WebKeys.THEME_DISPLAY);
+        ListNotificationSender service = this.listNotificationSender;
+        AssetListEntry entity = getAssetEntryList(renderRequest);
+        long userId = td.getUserId();
+        String receiverSelectMode = renderRequest.getPreferences().getValue("receiverSelectMode", "");
+        boolean isOptIn = "optin".equals(receiverSelectMode);
+        boolean isOptOut = "optout".equals(receiverSelectMode);
+        Optional<Boolean> prev = service.getOptedInStatus(entity, userId);
+        return (!isOptIn && !isOptOut) || (isOptIn && prev.orElse(false)) || (isOptOut && !(prev.isPresent() && !prev.get()));
+    }
+
+    private AssetListEntry getAssetEntryList(PortletRequest portletRequest) throws PortalException {
+        String idTxt = portletRequest.getPreferences().getValue("selectedAssetList", "0");
+        long id = Long.parseLong(idTxt);
+        return assetListEntryLocalService.getAssetListEntry(id);
     }
 
     private void checkForAssetRedirect(RenderRequest renderRequest, RenderResponse renderResponse) {
@@ -112,18 +139,31 @@ public class AssetListNotificationPortlet extends MVCPortlet {
         assetListNotificationConfiguration = ConfigurableUtil.createConfigurable(AssetListNotificationConfiguration.class, properties);
     }
 
-    private volatile AssetListNotificationConfiguration assetListNotificationConfiguration;
-
-
     @SuppressWarnings("unused")
-    public void toggleSubscriptionForMeManually(ActionRequest actionRequest, ActionResponse actionResponse) {
-        //get portlet pref, extract asset list entry, and write to list
-        throw new UnsupportedOperationException("not yet implemented");
+    public void toggleSubscriptionForMeManually(ActionRequest actionRequest, ActionResponse actionResponse) throws PortalException {
+        ThemeDisplay td = (ThemeDisplay) actionRequest.getAttribute(WebKeys.THEME_DISPLAY);
+        ListNotificationSender service = this.listNotificationSender;
+        AssetListEntry entity = getAssetEntryList(actionRequest);
+        long userId = td.getUserId();
+        String receiverSelectMode = actionRequest.getPreferences().getValue("receiverSelectMode", "");
+        boolean isOptIn = "optin".equals(receiverSelectMode);
+        boolean isOptOut = "optout".equals(receiverSelectMode);
+        if (!isOptIn && !isOptOut) {
+            throw new IllegalArgumentException("cannot opt in or out according to portlet settings");
+        }
+        Optional<Boolean> prev = service.getOptedInStatus(entity, userId);
+        if (prev.isEmpty()) {
+            if (isOptIn) {
+                service.optIntoNotification(entity, userId);
+            } else {
+                service.optOutOfNotification(entity, userId);
+            }
+        } else if (prev.get()) {
+            service.optOutOfNotification(entity, userId);
+        } else {
+            service.optIntoNotification(entity, userId);
+        }
     }
-
-
-    // to dynamically use assetrenderers to get view urls for each asset if we want
-    private final Map<String, List<AssetRendererFactory<?>>> assetRendererFactoryHashMap = new HashMap<>();
 
     @Reference(cardinality = ReferenceCardinality.MULTIPLE, policy = ReferencePolicy.DYNAMIC, unbind = "removeAssetRendererFactory")
     protected void addAssetRendererFactory(AssetRendererFactory<?> factory) {

@@ -2,6 +2,7 @@ package com.github.ckaag.asset.list.notifications.portlet.service;
 
 import com.liferay.asset.kernel.model.AssetEntry;
 import com.liferay.asset.list.model.AssetListEntry;
+import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.model.User;
 
@@ -10,8 +11,15 @@ import java.time.LocalDateTime;
 import java.util.AbstractMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public interface ListNotificationSender {
+    void optOutOfNotification(AssetListEntry list, long userId) throws PortalException;
+
+    void optIntoNotification(AssetListEntry list, long userId) throws PortalException;
+
+    Optional<Boolean> getOptedInStatus(AssetListEntry entity, long userId) throws PortalException;
+
     Map<AssetListEntry, AbstractMap.SimpleImmutableEntry<com.liferay.portal.kernel.model.PortletPreferences, PortletPreferences>> getNotificationPortlets();
 
     LocalDateTime getLastModifiedDate(AssetListEntry list, PortletPreferences portletPreferences);
@@ -24,9 +32,9 @@ public interface ListNotificationSender {
 
     List<User> getSubscribingUsers(AssetListEntry list, PortletPreferences portletPreferences);
 
-    void sendMailInternal(LocalDateTime lastModifiedDate, AssetListEntry list, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences portletPreferences, List<User> receivingUserIds, List<AssetEntry> content);
+    void sendMailInternal(LocalDateTime lastModifiedDate, AssetListEntry list, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences portletPreferences, List<User> receivingUserIds, List<AssetEntry> content) throws PortalException;
 
-    default void sendMailUpdatesTo(LocalDateTime lastModifiedDate, AssetListEntry list, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences portletPreferences, List<User> receivingUserIds, List<AssetEntry> content, boolean updateLastModifiedField) {
+    default void sendMailUpdatesTo(LocalDateTime lastModifiedDate, AssetListEntry list, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences portletPreferences, List<User> receivingUserIds, List<AssetEntry> content, boolean updateLastModifiedField) throws PortalException {
         sendMailInternal(lastModifiedDate, list, liferayPortletPreferences, portletPreferences, receivingUserIds, content);
         if (updateLastModifiedField) {
             this.updateLastDates(list, portletPreferences, true, true);
@@ -47,7 +55,7 @@ public interface ListNotificationSender {
         }
     }
 
-    default void tickScheduler() {
+    default void tickScheduler() throws PortalException {
         for (Map.Entry<AssetListEntry, AbstractMap.SimpleImmutableEntry<com.liferay.portal.kernel.model.PortletPreferences, PortletPreferences>> pair : getNotificationPortlets().entrySet()) {
             AbstractMap.SimpleImmutableEntry<com.liferay.portal.kernel.model.PortletPreferences, PortletPreferences> portletPreferencesPair = pair.getValue();
             LocalDateTime lastSentDate = getLastSentDate(pair.getKey(), portletPreferencesPair.getValue());

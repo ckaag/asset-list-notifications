@@ -17,19 +17,13 @@ public interface NotificationService {
 
     void sendUserNotification(User receiver, String body);
 
-    boolean isListeningForMail(User receiver);
-
-    boolean isListeningForNotification(User receiver);
-
-    default void sendUserMailAndNotificationIfRequested(User receiver, AssetListEntry sourcedList, String emailFromAddress, String emailFromName, LocalDateTime lastModified, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences preferences, List<AssetEntry> newAssets) {
-        final boolean isMail = isListeningForMail(receiver);
-        final boolean isNotification = isListeningForNotification(receiver);
-        if (!isMail && !isNotification) return;
+    default void sendUserMailAndNotificationIfRequested(boolean isListeningForMail, boolean isListeningForNotification, User receiver, AssetListEntry sourcedList, String emailFromAddress, String emailFromName, LocalDateTime lastModified, com.liferay.portal.kernel.model.PortletPreferences liferayPortletPreferences, PortletPreferences preferences, List<AssetEntry> newAssets) {
+        if (!isListeningForMail && !isListeningForNotification) return;
         final String body = buildHtmlBodyMail(receiver, sourcedList, liferayPortletPreferences, preferences, lastModified, newAssets);
-        if (isNotification) {
+        if (isListeningForNotification) {
             sendUserNotification(receiver, body);
         }
-        if (isMail) {
+        if (isListeningForMail) {
             final String subject = buildSubjectMail(receiver, sourcedList, liferayPortletPreferences, preferences, lastModified, newAssets);
             sendUserMail(emailFromAddress, emailFromName, receiver, subject, body);
         }

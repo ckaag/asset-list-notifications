@@ -41,12 +41,12 @@
 
 
     <aui:select label="receiver-select-mode-label" name="receiverSelectMode" value="<%= receiverSelectMode %>">
-        <%-- <aui:option value="optin">Opt-In (only get notifications if opted in manually)</aui:option> --%>
-        <%-- <aui:option value="optout">Opt-Out (everyone gets notifications except if he opted out manually)</aui:option> --%>
+        <aui:option value="optin"><liferay-ui:message key="assetlistnotification.opt-in-mode"/></aui:option>
+        <aui:option value="optout"><liferay-ui:message key="assetlistnotification.opt-out-mode"/></aui:option>
         <aui:option value="forced"><liferay-ui:message key="assetlistnotification.this-is-not-a-choice"/></aui:option>
     </aui:select>
     <aui:select label="user-specific-mode-label" name="userSpecificMode" value="<%= userSpecificMode %>">
-        <aui:option value="true">Evaluate per individual user (Default)</aui:option>
+        <aui:option value="true"><liferay-ui:message key="assetlistnotification.user-specific-mode"/></aui:option>
         <%-- <aui:option value="false"><liferay-ui:message key="assetlistnotification.everybody-gets-same"/></aui:option> --%>
     </aui:select>
 
